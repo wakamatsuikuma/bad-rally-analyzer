@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pulse Catch</title>
+    <style>
+      :root {
+        --bg: #07111f;
+        --panel: rgba(11, 27, 46, 0.9);
+        --panel-border: rgba(130, 196, 255, 0.22);
+        --text: #eff7ff;
+        --muted: #9db7d1;
+        --accent: #7ef0c8;
+        --accent-2: #ffd166;
+        --danger: #ff6b6b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: "Trebuchet MS", "Hiragino Sans", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top, rgba(126, 240, 200, 0.18), transparent 28%),
+          radial-gradient(circle at bottom right, rgba(255, 209, 102, 0.14), transparent 24%),
+          linear-gradient(160deg, #02060c, var(--bg));
+      }
+
+      .shell {
+        width: min(92vw, 860px);
+        padding: 24px;
+        border: 1px solid var(--panel-border);
+        border-radius: 24px;
+        background: var(--panel);
+        box-shadow: 0 24px 90px rgba(0, 0, 0, 0.42);
+        backdrop-filter: blur(12px);
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: start;
+        margin-bottom: 22px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2rem, 4vw, 3.6rem);
+        letter-spacing: 0.04em;
+      }
+
+      .subtitle {
+        margin: 8px 0 0;
+        color: var(--muted);
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(90px, 1fr));
+        gap: 10px;
+        width: min(100%, 320px);
+      }
+
+      .stat {
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .stat-label {
+        font-size: 0.75rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .stat-value {
+        display: block;
+        margin-top: 6px;
+        font-size: 1.4rem;
+        font-weight: 700;
+      }
+
+      .arena-wrap {
+        display: grid;
+        grid-template-columns: 1fr 230px;
+        gap: 18px;
+      }
+
+      .arena {
+        position: relative;
+        min-height: 460px;
+        border-radius: 22px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+          linear-gradient(180deg, rgba(10, 24, 41, 0.8), rgba(5, 15, 26, 1));
+        background-size: 48px 48px, 48px 48px, cover;
+      }
+
+      .target {
+        position: absolute;
+        width: 72px;
+        height: 72px;
+        border: 0;
+        border-radius: 50%;
+        cursor: pointer;
+        background:
+          radial-gradient(circle at 35% 35%, #fff, #d6fff2 18%, #7ef0c8 34%, #1e936e 68%, #0e4739 100%);
+        box-shadow: 0 0 0 0 rgba(126, 240, 200, 0.6);
+        animation: pulse 1s infinite;
+        transition: transform 0.12s ease;
+      }
+
+      .target:hover {
+        transform: scale(1.06);
+      }
+
+      .target.bad {
+        background:
+          radial-gradient(circle at 35% 35%, #fff, #ffd3d3 18%, #ff8f8f 34%, #d94848 68%, #661d1d 100%);
+        box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.6);
+      }
+
+      .sidebar {
+        display: grid;
+        gap: 14px;
+        align-content: start;
+      }
+
+      .card {
+        padding: 16px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.045);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .card h2 {
+        margin: 0 0 10px;
+        font-size: 1rem;
+      }
+
+      .card p,
+      .card li {
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .card ul {
+        padding-left: 18px;
+        margin: 10px 0 0;
+      }
+
+      .actions {
+        display: flex;
+        gap: 10px;
+      }
+
+      button.control {
+        flex: 1;
+        padding: 12px 14px;
+        border: 0;
+        border-radius: 999px;
+        font: inherit;
+        font-weight: 700;
+        color: #041019;
+        background: linear-gradient(135deg, var(--accent), #d7fff0);
+        cursor: pointer;
+      }
+
+      button.control.secondary {
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .message {
+        position: absolute;
+        inset: auto 16px 16px 16px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(4, 12, 20, 0.78);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--muted);
+      }
+
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(126, 240, 200, 0.5);
+        }
+        70% {
+          box-shadow: 0 0 0 22px rgba(126, 240, 200, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(126, 240, 200, 0);
+        }
+      }
+
+      @media (max-width: 780px) {
+        .arena-wrap {
+          grid-template-columns: 1fr;
+        }
+
+        .topbar {
+          flex-direction: column;
+        }
+
+        .stats {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="topbar">
+        <div>
+          <h1>Pulse Catch</h1>
+          <p class="subtitle">60秒で光るパルスを集め、赤いノイズを避ける反射神経ゲーム。</p>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <span class="stat-label">Score</span>
+            <span class="stat-value" id="score">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Time</span>
+            <span class="stat-value" id="time">60</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Best</span>
+            <span class="stat-value" id="best">0</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="arena-wrap">
+        <div class="arena" id="arena">
+          <div class="message" id="message">Start を押すとゲーム開始。緑は +1、赤は -2 です。</div>
+        </div>
+        <aside class="sidebar">
+          <div class="card">
+            <h2>操作</h2>
+            <p>マウスかタップで円をクリックします。緑を優先し、赤は避けてください。</p>
+          </div>
+          <div class="card">
+            <h2>ルール</h2>
+            <ul>
+              <li>制限時間は60秒</li>
+              <li>緑のパルスで1点</li>
+              <li>赤いノイズで2点減点</li>
+              <li>時間が経つほど出現速度が上がる</li>
+            </ul>
+          </div>
+          <div class="actions">
+            <button class="control" id="start">Start</button>
+            <button class="control secondary" id="reset">Reset</button>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script>
+      const arena = document.getElementById("arena");
+      const scoreNode = document.getElementById("score");
+      const timeNode = document.getElementById("time");
+      const bestNode = document.getElementById("best");
+      const messageNode = document.getElementById("message");
+      const startButton = document.getElementById("start");
+      const resetButton = document.getElementById("reset");
+
+      const targetSize = 72;
+      const gameLength = 60;
+      const bestKey = "pulse-catch-best";
+
+      let score = 0;
+      let timeLeft = gameLength;
+      let running = false;
+      let spawnTimer = null;
+      let countdownTimer = null;
+
+      const loadBest = () => Number(localStorage.getItem(bestKey) || 0);
+      const saveBest = (best) => localStorage.setItem(bestKey, String(best));
+
+      const render = () => {
+        scoreNode.textContent = String(score);
+        timeNode.textContent = String(timeLeft);
+        bestNode.textContent = String(loadBest());
+      };
+
+      const clearTargets = () => {
+        arena.querySelectorAll(".target").forEach((node) => node.remove());
+      };
+
+      const setMessage = (text) => {
+        messageNode.textContent = text;
+      };
+
+      const spawnTarget = () => {
+        if (!running) {
+          return;
+        }
+
+        const rect = arena.getBoundingClientRect();
+        const maxX = Math.max(0, rect.width - targetSize);
+        const maxY = Math.max(0, rect.height - targetSize);
+        const isBad = Math.random() < 0.28;
+        const target = document.createElement("button");
+
+        target.type = "button";
+        target.className = `target${isBad ? " bad" : ""}`;
+        target.style.left = `${Math.random() * maxX}px`;
+        target.style.top = `${Math.random() * maxY}px`;
+
+        target.addEventListener("click", () => {
+          score += isBad ? -2 : 1;
+          target.remove();
+          render();
+        });
+
+        arena.appendChild(target);
+
+        window.setTimeout(() => {
+          target.remove();
+        }, isBad ? 900 : 1200);
+
+        const nextDelay = Math.max(240, 780 - (gameLength - timeLeft) * 7);
+        spawnTimer = window.setTimeout(spawnTarget, nextDelay);
+      };
+
+      const finishGame = () => {
+        running = false;
+        window.clearTimeout(spawnTimer);
+        window.clearInterval(countdownTimer);
+        clearTargets();
+
+        const best = loadBest();
+        if (score > best) {
+          saveBest(score);
+          setMessage(`終了。新記録 ${score} 点です。もう一度挑戦できます。`);
+        } else {
+          setMessage(`終了。今回のスコアは ${score} 点、最高記録は ${best} 点です。`);
+        }
+        render();
+      };
+
+      const startGame = () => {
+        if (running) {
+          return;
+        }
+
+        score = 0;
+        timeLeft = gameLength;
+        running = true;
+        clearTargets();
+        render();
+        setMessage("ゲーム中。緑を取り、赤を避けてください。");
+
+        countdownTimer = window.setInterval(() => {
+          timeLeft -= 1;
+          render();
+
+          if (timeLeft <= 0) {
+            finishGame();
+          }
+        }, 1000);
+
+        spawnTarget();
+      };
+
+      const resetGame = () => {
+        running = false;
+        score = 0;
+        timeLeft = gameLength;
+        window.clearTimeout(spawnTimer);
+        window.clearInterval(countdownTimer);
+        clearTargets();
+        render();
+        setMessage("リセットしました。Start を押すと再開します。");
+      };
+
+      startButton.addEventListener("click", startGame);
+      resetButton.addEventListener("click", resetGame);
+
+      render();
+    </script>
+  </body>
+</html>
