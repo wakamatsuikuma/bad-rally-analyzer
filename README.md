@@ -26,6 +26,15 @@ GEMINI_API_KEY=xxxxx
 uv run streamlit run src/app.py
 ```
 
+## ディレクトリ構成
+
+最新のディレクトリ構成は [docs/directory-structure.md](/Users/wakamatsuikuma/workspace/bad-rally-analyzer/docs/directory-structure.md) に記録します。
+更新する場合は次を実行してください。
+
+```bash
+uv run python scripts/update_directory_structure.py
+```
+
 ## 出力内容
 
 - 動画全体の平均打数
@@ -38,5 +47,6 @@ uv run streamlit run src/app.py
 ## 実装メモ
 
 - 初版は Gemini API のみを使うため、打数はモデル推定です
+- Gemini へ渡す動画メタデータの `fps` は `5` に固定しています
 - OpenCV による前処理や補正はまだ入っていません
 - 長尺動画はアップロードと解析に時間がかかります

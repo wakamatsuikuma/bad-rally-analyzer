@@ -14,6 +14,7 @@ from gemini.schemas import VideoAnalysisResult
 from prompts.badminton_rally_prompt import SYSTEM_INSTRUCTION, USER_PROMPT
 
 DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_VIDEO_FPS = 20
 
 
 class GeminiAnalyzerError(RuntimeError):
@@ -35,10 +36,11 @@ class GeminiBadmintonAnalyzer:
             raise GeminiAnalyzerError(f"動画ファイルが見つかりません: {video_path}")
 
         uploaded_file = self._upload_and_wait(video_path)
+        video_part = self._build_video_part(uploaded_file)
 
         response = self.client.models.generate_content(
             model=self.model_name,
-            contents=[uploaded_file, USER_PROMPT],
+            contents=[video_part, USER_PROMPT],
             config={
                 "system_instruction": SYSTEM_INSTRUCTION,
                 "temperature": 0,
@@ -69,6 +71,15 @@ class GeminiBadmintonAnalyzer:
             uploaded_file = self.client.files.get(name=uploaded_file.name)
 
         return uploaded_file
+
+    def _build_video_part(self, uploaded_file):
+        return genai.types.Part(
+            file_data=genai.types.FileData(
+                file_uri=uploaded_file.uri,
+                mime_type=uploaded_file.mime_type,
+            ),
+            video_metadata=genai.types.VideoMetadata(fps=DEFAULT_VIDEO_FPS),
+        )
 
     def _normalize_result(self, result: VideoAnalysisResult) -> VideoAnalysisResult:
         if result.total_rallies <= 0 or not result.rallies:

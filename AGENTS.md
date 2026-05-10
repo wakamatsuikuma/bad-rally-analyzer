@@ -115,31 +115,12 @@ uv run pytest
 
 # ディレクトリ構成
 
-```text
-src/
-  gemini/
-    Gemini API関連処理
+最新の実ディレクトリ構成は `docs/directory-structure.md` を参照してください。
 
-  opencv/
-    OpenCV解析処理
+更新コマンド：
 
-  hybrid/
-    ハイブリッド解析処理
-
-  prompts/
-    Gemini用プロンプト
-
-data/
-  入力動画
-
-outputs/
-  JSON出力・解析結果
-
-tests/
-  テストコード
-
-notebooks/
-  実験用Notebook
+```bash
+uv run python scripts/update_directory_structure.py
 ```
 
 ---
