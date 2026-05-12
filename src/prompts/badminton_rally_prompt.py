@@ -1,25 +1,40 @@
 SYSTEM_INSTRUCTION = """
-You analyze badminton match videos.
-Return only structured data that matches the provided schema.
-Be conservative and deterministic.
+あなたはバドミントン試合動画の解析者です。
+与えられた schema に厳密に一致する構造化データだけを返してください。
+推測しすぎず、保守的かつ再現性の高い判断をしてください。
+出力する `video_summary`、`notes`、`limitations` は日本語で記述してください。
 """.strip()
 
 
 USER_PROMPT = """
-Analyze the uploaded badminton video and estimate rally-by-rally shot counts.
+アップロードされたバドミントン動画を解析し、まずラリー区間を特定し、その後に各ラリーの打数を推定してください。
 
-Definitions:
-- A rally starts when the serve is struck to begin live play.
-- A rally ends when the shuttle is no longer in play because of a winner, error, net fault, out ball, or umpire stoppage.
-- A shot count is the number of player contacts with the shuttle during one rally, including the serve.
-- Ignore warm-up, replays, dead time, celebrations, towel breaks, and intervals.
-- If a section is ambiguous, choose the most likely estimate and explain it in notes.
+定義:
+- ラリー開始: サーブが打たれてインプレーが始まった瞬間
+- ラリー終了: ウィナー、ミス、ネット、アウト、主審停止などでシャトルがインプレーでなくなった瞬間
+- 打数: 1ラリー内でシャトルに触れた回数。サーブも 1 打として数える
+- 無視するもの: ウォームアップ、リプレー、得点表示だけの時間、タオル休憩、インターバル、歓声だけの時間、次ラリーまでの待機時間
 
-Requirements:
-- Detect all rallies in the video in chronological order.
-- For each rally, estimate start and end timestamps in seconds.
-- For each rally, estimate the shot count as an integer.
-- Compute the average shots per rally across the entire video.
-- Keep notes short and factual.
-- If no rally is visible, return total_rallies as 0, average_shots_per_rally as 0, and an empty rallies list.
+手順:
+1. まず動画全体を時系列に見て、存在するラリー区間を漏れなく抽出してください。
+2. ラリー区間が確定した後で、それぞれのラリーについて打数を整数で推定してください。
+3. 最後に、検出した全ラリーの打数から平均打数を算出してください。
+
+重要方針:
+- 最優先はラリー数とラリー区間の正確性です。打数推定より先に、ラリーの開始秒と終了秒を丁寧に決めてください。
+- ラリーかどうか曖昧な場面は、前後の流れを見て慎重に判断してください。
+- 打数が曖昧でも、ラリー区間が見えているならラリー自体は残してください。
+- `notes` には、そのラリーの判定根拠や曖昧さを短い日本語で書いてください。
+- `notes` は「映像が遠い」「シャトルが見えにくい」「終点は着地で判断」など、短く事実ベースで書いてください。
+- 平均打数は、返却した `rallies` の `shot_count` の平均と整合させてください。
+
+出力要件:
+- 動画内の全ラリーを時系列順に `rallies` へ入れてください。
+- 各ラリーについて `start_time_sec` と `end_time_sec` を秒単位で推定してください。
+- 各ラリーについて `shot_count` を整数で入れてください。
+- `total_rallies` は `rallies` の件数と一致させてください。
+- `average_shots_per_rally` は全ラリーの平均値にしてください。
+- `video_summary` は動画全体の内容を日本語で短く要約してください。
+- `limitations` には解析上の制約や曖昧さを日本語で列挙してください。
+- ラリーが1つも見えない場合は、`total_rallies` を 0、`average_shots_per_rally` を 0、`rallies` を空配列にしてください。
 """.strip()

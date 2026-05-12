@@ -60,6 +60,14 @@ class GeminiBadmintonAnalyzer:
         raw_payload = json.loads(response.text)
         return normalized, raw_payload
 
+    def get_analysis_config(self) -> dict:
+        return {
+            "model_name": self.model_name,
+            "video_fps": DEFAULT_VIDEO_FPS,
+            "system_instruction": SYSTEM_INSTRUCTION,
+            "user_prompt": USER_PROMPT,
+        }
+
     def _upload_and_wait(self, video_path: Path):
         mime_type = mimetypes.guess_type(video_path.name)[0] or "video/mp4"
         uploaded_file = self.client.files.upload(file=str(video_path), config={"mime_type": mime_type})
