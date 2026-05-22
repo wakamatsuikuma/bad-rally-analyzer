@@ -1,5 +1,6 @@
 .env
 .venv/
+.uv-cache/
 **pycache**/
 outputs/
 data/

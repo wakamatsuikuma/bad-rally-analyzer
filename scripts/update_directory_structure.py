@@ -8,6 +8,7 @@ OUTPUT_PATH = ROOT / "docs" / "directory-structure.md"
 SKIP_NAMES = {
     ".git",
     ".venv",
+    ".uv-cache",
     "__pycache__",
     ".mypy_cache",
     ".pytest_cache",

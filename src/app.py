@@ -6,6 +6,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 
+import pandas as pd
 import streamlit as st
 
 from gemini.analyzer import (
@@ -14,9 +15,20 @@ from gemini.analyzer import (
     GeminiAnalyzerError,
     GeminiBadmintonAnalyzer,
 )
+from opencv.video_loader import VideoLoadError
+from pipeline.opencv_audio import (
+    DEFAULT_FRAME_STEP,
+    DEFAULT_MERGE_GAP_SEC,
+    DEFAULT_MIN_RALLY_DURATION_SEC,
+    DEFAULT_OUTPUT_DIR,
+    PipelineRunResult,
+    run_opencv_audio_analysis,
+)
 from prompts.badminton_rally_prompt import SYSTEM_INSTRUCTION, USER_PROMPT
 
 OUTPUTS_DIR = Path("outputs")
+DASHBOARD_DEFAULT_VIDEO_PATH = Path("data/test_movie.mp4")
+DASHBOARD_OUTPUT_ROOT = DEFAULT_OUTPUT_DIR / "opencv_dashboard"
 MODEL_OPTIONS = [
     "gemini-2.5-flash",
     "gemini-3-flash-preview",
@@ -43,7 +55,15 @@ def persist_result(original_name: str, result_json: dict) -> Path:
 def list_saved_results() -> list[Path]:
     if not OUTPUTS_DIR.exists():
         return []
-    return sorted(OUTPUTS_DIR.glob("*.json"), reverse=True)
+    saved_results = []
+    for path in OUTPUTS_DIR.glob("*.json"):
+        try:
+            payload = load_saved_result(path)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if "average_shots_per_rally" in payload and "total_rallies" in payload:
+            saved_results.append(path)
+    return sorted(saved_results, reverse=True)
 
 
 def load_saved_result(saved_path: Path) -> dict[str, Any]:
@@ -94,6 +114,166 @@ def render_summary(result_json: dict) -> None:
             st.write(f"- {item}")
 
 
+def build_dashboard_output_dir(output_root: Path, video_name: str) -> Path:
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    safe_name = Path(video_name).stem.replace(" ", "_")
+    return output_root / f"{timestamp}-{safe_name}"
+
+
+def render_opencv_dashboard() -> None:
+    st.subheader("OpenCV / Audio PoC")
+
+    source_mode = st.radio(
+        "動画ソース",
+        options=["data/test_movie.mp4", "アップロード"],
+        horizontal=True,
+    )
+
+    uploaded_file = None
+    temp_video_path: Path | None = None
+    video_path = DASHBOARD_DEFAULT_VIDEO_PATH
+    source_name = DASHBOARD_DEFAULT_VIDEO_PATH.name
+
+    if source_mode == "アップロード":
+        uploaded_file = st.file_uploader(
+            "動画ファイル",
+            type=["mp4", "mov", "avi", "mkv", "webm"],
+            accept_multiple_files=False,
+            key="opencv_video_upload",
+        )
+        video_ready = uploaded_file is not None
+        if uploaded_file is not None:
+            source_name = uploaded_file.name
+            st.video(uploaded_file)
+    else:
+        video_path = Path(st.text_input("動画ファイル", value=str(DASHBOARD_DEFAULT_VIDEO_PATH)))
+        source_name = video_path.name
+        video_ready = video_path.exists()
+        if video_ready:
+            st.video(str(video_path))
+        else:
+            st.warning(f"動画ファイルが見つかりません: {video_path}")
+
+    with st.expander("解析パラメータ", expanded=True):
+        col1, col2, col3 = st.columns(3)
+        frame_step = col1.number_input("frame-step", min_value=1, value=DEFAULT_FRAME_STEP, step=1)
+        min_rally_duration = col2.number_input(
+            "min-rally-duration",
+            min_value=0.1,
+            value=DEFAULT_MIN_RALLY_DURATION_SEC,
+            step=0.5,
+        )
+        merge_gap = col3.number_input("merge-gap", min_value=0.0, value=DEFAULT_MERGE_GAP_SEC, step=0.5)
+
+        roi_text = st.text_input("roi", value="", placeholder="例: 100,50,1180,700")
+        auto_threshold = st.checkbox("motion-threshold を自動推定", value=True)
+        motion_threshold = None
+        if not auto_threshold:
+            motion_threshold = st.number_input("motion-threshold", min_value=0.0, value=3.0, step=0.5)
+
+        col4, col5 = st.columns(2)
+        audio_enabled = col4.checkbox("audio-enabled", value=True)
+        output_root = Path(col5.text_input("output-dir", value=str(DASHBOARD_OUTPUT_ROOT)))
+
+    if st.button("解析を実行", type="primary", disabled=not video_ready, key="run_opencv_analysis"):
+        if uploaded_file is not None:
+            temp_video_path = save_uploaded_file(uploaded_file)
+            video_path = temp_video_path
+
+        output_dir = build_dashboard_output_dir(output_root, source_name)
+        try:
+            with st.spinner("解析中です。動画長によって時間がかかります。"):
+                run = run_opencv_audio_analysis(
+                    video_path=video_path,
+                    output_dir=output_dir,
+                    frame_step=int(frame_step),
+                    roi_text=roi_text.strip() or None,
+                    motion_threshold=motion_threshold,
+                    min_rally_duration=float(min_rally_duration),
+                    merge_gap=float(merge_gap),
+                    audio_enabled=audio_enabled,
+                )
+                st.session_state["opencv_last_run"] = run
+        except VideoLoadError as exc:
+            st.error(str(exc))
+        except Exception as exc:  # pragma: no cover
+            st.exception(exc)
+        finally:
+            if temp_video_path is not None:
+                temp_video_path.unlink(missing_ok=True)
+
+    last_run = st.session_state.get("opencv_last_run")
+    if last_run is not None:
+        render_opencv_result(last_run)
+
+
+def render_opencv_result(run: PipelineRunResult) -> None:
+    result = run.result
+    total_audio_shots = sum(rally.estimated_shots_audio for rally in result.rallies)
+    config = result.analysis_config
+
+    st.divider()
+    st.subheader("解析結果")
+    metric_columns = st.columns(4)
+    metric_columns[0].metric("ラリー候補数", result.rally_count)
+    metric_columns[1].metric("音声ピーク打球候補", total_audio_shots)
+    metric_columns[2].metric("動画秒数", round(config.duration_sec, 2))
+    metric_columns[3].metric("motion-threshold", config.motion_threshold)
+
+    st.caption(f"保存先: {run.paths.output_dir}")
+
+    if result.rallies:
+        rally_rows = [
+            {
+                "rally_id": rally.rally_id,
+                "start_sec": rally.start_sec,
+                "end_sec": rally.end_sec,
+                "duration_sec": rally.duration_sec,
+                "estimated_shots_audio": rally.estimated_shots_audio,
+                "confidence": rally.confidence,
+            }
+            for rally in result.rallies
+        ]
+        st.dataframe(pd.DataFrame(rally_rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("ラリー候補は検出されませんでした。")
+
+    if run.paths.motion_png_path.exists():
+        st.image(str(run.paths.motion_png_path), use_container_width=True)
+
+    with st.expander("rally_candidates.json", expanded=True):
+        st.json(result.model_dump(mode="json"))
+
+    col1, col2, col3 = st.columns(3)
+    col1.download_button(
+        "rally_candidates.json",
+        data=run.paths.rally_json_path.read_bytes(),
+        file_name=run.paths.rally_json_path.name,
+        mime="application/json",
+    )
+    col2.download_button(
+        "motion_score.csv",
+        data=run.paths.motion_csv_path.read_bytes(),
+        file_name=run.paths.motion_csv_path.name,
+        mime="text/csv",
+    )
+    col3.download_button(
+        "audio_peaks.csv",
+        data=run.paths.audio_csv_path.read_bytes(),
+        file_name=run.paths.audio_csv_path.name,
+        mime="text/csv",
+    )
+
+    with st.expander("motion_score.csv"):
+        st.dataframe(run.motion_df, use_container_width=True, height=320)
+
+    with st.expander("audio_peaks.csv"):
+        if run.audio_peaks_df.empty:
+            st.info(result.analysis_config.audio_note)
+        else:
+            st.dataframe(run.audio_peaks_df, use_container_width=True, height=260)
+
+
 def render_saved_result_selector() -> None:
     saved_results = list_saved_results()
     if not saved_results:
@@ -128,13 +308,10 @@ def render_saved_result_selector() -> None:
         st.json(metadata)
 
 
-def main() -> None:
-    st.set_page_config(page_title="Badminton Rally Analyzer", page_icon="🏸", layout="wide")
-    st.title("Badminton Rally Analyzer")
-    st.caption("Gemini API 単独で動画からラリーごとの打数を推定し、平均打数を算出します。")
+def render_gemini_app() -> None:
+    st.subheader("Gemini API")
 
-    with st.sidebar:
-        st.header("設定")
+    with st.expander("設定", expanded=True):
         selected_model = st.selectbox(
             "Gemini model",
             options=MODEL_OPTIONS,
@@ -162,7 +339,7 @@ def main() -> None:
 
     st.video(uploaded_file)
 
-    if st.button("解析を実行", type="primary"):
+    if st.button("解析を実行", type="primary", key="run_gemini_analysis"):
         temp_video_path = save_uploaded_file(uploaded_file)
 
         try:
@@ -203,6 +380,18 @@ def main() -> None:
             file_name=saved_path.name,
             mime="application/json",
         )
+
+
+def main() -> None:
+    st.set_page_config(page_title="Badminton Rally Analyzer", page_icon="🏸", layout="wide")
+    st.title("Badminton Rally Analyzer")
+    st.caption("OpenCV/音声解析PoCとGemini API解析を確認できます。")
+
+    opencv_tab, gemini_tab = st.tabs(["OpenCV / Audio PoC", "Gemini API"])
+    with opencv_tab:
+        render_opencv_dashboard()
+    with gemini_tab:
+        render_gemini_app()
 
 
 if __name__ == "__main__":
